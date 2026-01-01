@@ -2,7 +2,7 @@
 
 PaperDiff is a minimalist, lightweight, and offline-ready web tool to compare two blocks of text or code. It features a clean, retro-style interface and highlights syntax for common programming languages.
 
-
+[Try me on GitHub ](https://miw4n.github.io/PaperDiff/)
 
 ---
 
