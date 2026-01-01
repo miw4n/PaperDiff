@@ -67,6 +67,10 @@ textarea {
     font-size: 13px;
 }
 
+.added    { background: #d7ecd9; }
+.removed  { background: #f3cfcf; }
+.modified { background: #f2d6d6; }
+
 .diffview {
     flex: 1;
     overflow: auto;
@@ -148,6 +152,79 @@ function gotoLine(container, lineIndex) {
     });
 }
 
+function myersDiff(a, b) {
+    const N = a.length;
+    const M = b.length;
+    const max = N + M;
+    const v = new Map();
+    v.set(1, 0);
+    const trace = [];
+
+    for (let d = 0; d <= max; d++) {
+        const current = new Map(v);
+        trace.push(current);
+
+        for (let k = -d; k <= d; k += 2) {
+            let x;
+            if (k === -d || (k !== d && v.get(k - 1) < v.get(k + 1))) {
+                x = v.get(k + 1);
+            } else {
+                x = v.get(k - 1) + 1;
+            }
+            let y = x - k;
+
+            while (x < N && y < M && a[x] === b[y]) {
+                x++; y++;
+            }
+            current.set(k, x);
+
+            if (x >= N && y >= M) {
+                return buildEditScript(trace, a, b);
+            }
+        }
+        v.clear();
+        for (let [k, val] of current) v.set(k, val);
+    }
+}
+
+function buildEditScript(trace, a, b) {
+    let x = a.length;
+    let y = b.length;
+    const result = [];
+
+    for (let d = trace.length - 1; d >= 0; d--) {
+        const v = trace[d];
+        const k = x - y;
+        let prevK;
+
+        if (k === -d || (k !== d && v.get(k - 1) < v.get(k + 1))) {
+            prevK = k + 1;
+        } else {
+            prevK = k - 1;
+        }
+
+        const prevX = v.get(prevK);
+        const prevY = prevX - prevK;
+
+        while (x > prevX && y > prevY) {
+            result.push({ type: "equal", line: a[x - 1] });
+            x--; y--;
+        }
+
+        if (d === 0) break;
+
+        if (x === prevX) {
+            result.push({ type: "add", line: b[y - 1] });
+            y--;
+        } else {
+            result.push({ type: "remove", line: a[x - 1] });
+            x--;
+        }
+    }
+
+    return result.reverse();
+}
+
 
 function detectLang(t) {
     if (/^\s*<[^>]+>/m.test(t)) return "html";
@@ -196,22 +273,65 @@ function compare() {
     diffs = [];
     diffIndex = -1;
 
-    let L = left.value.split("\n");
-    let R = right.value.split("\n");
-    let max = Math.max(L.length, R.length);
+    const L = left.value.split("\n");
+    const R = right.value.split("\n");
 
-    let diffSet = new Set();
+    const script = myersDiff(L, R);
 
-    for (let i = 0; i < max; i++) {
-        if ((L[i] || "") !== (R[i] || "")) diffSet.add(i);
-    }
+    leftView.innerHTML = "";
+    rightView.innerHTML = "";
 
-    diffs = [...diffSet];
-    buildView(leftView, L, diffSet);
-    buildView(rightView, R, diffSet);
+    let lnum = 1;
+    let rnum = 1;
+    let lineIndex = 0;
 
-    info.textContent = `${diffs.length} différence(s)`;
+    script.forEach(step => {
+        if (step.type === "equal") {
+            renderLine(leftView, lnum++, step.line, "equal");
+            renderLine(rightView, rnum++, step.line, "equal");
+        }
+        else if (step.type === "remove") {
+            renderLine(leftView, lnum++, step.line, "removed");
+            renderEmpty(rightView);
+            diffs.push(lineIndex++);
+        }
+        else if (step.type === "add") {
+            renderEmpty(leftView);
+            renderLine(rightView, rnum++, step.line, "added");
+            diffs.push(lineIndex++);
+        }
+    });
+
+    info.textContent = `${diffs.length} changement(s)`;
 }
+
+function renderLine(container, num, text, cls) {
+    const ln = document.createElement("div");
+    ln.className = "lineno";
+    ln.textContent = num;
+    ln.onclick = () => gotoLine(container, num - 1);
+
+    const cd = document.createElement("div");
+    cd.className = "code " + cls;
+    cd.innerHTML = highlight(text);
+    if (cls !== "equal") cd.dataset.diff = "";
+
+    container.appendChild(ln);
+    container.appendChild(cd);
+}
+
+function renderEmpty(container) {
+    const ln = document.createElement("div");
+    ln.className = "lineno";
+    ln.textContent = "";
+
+    const cd = document.createElement("div");
+    cd.className = "code";
+
+    container.appendChild(ln);
+    container.appendChild(cd);
+}
+
 
 function gotoDiff(i) {
     if (!diffs.length) return;
