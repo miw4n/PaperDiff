@@ -17,12 +17,12 @@
     background: #cdbf9f;
 }
 
-
 body {
     margin: 0;
     background: var(--bg-main);
     color: var(--text);
     font-family: Consolas, monospace;
+	padding-top: 65px;
 }
 
 header {
@@ -35,6 +35,7 @@ header {
     display: flex;
     gap: 8px;
     align-items: center;
+	height: 48px;
 }
 
 button {
@@ -49,6 +50,7 @@ button:hover { background: #cdbf9f; }
     display: grid;
     grid-template-columns: 1fr 1fr;
     height: calc(100vh - 48px);
+	padding-top: 0px;
 }
 
 .panel {
@@ -102,6 +104,9 @@ textarea {
 /* Diff */
 .diff { background: var(--bg-diff); }
 .diff-active { outline: 2px solid #c92a2a; }
+
+.word-diff { background: #e6a5a5; padding: 0 2px; border-radius: 2px; }
+
 </style>
 </head>
 
@@ -114,7 +119,9 @@ textarea {
     <button onclick="resetLeft()">Reset G</button>
     <button onclick="resetRight()">Reset D</button>
     <button onclick="resetAll()">Reset All</button>
-<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="miw4n" data-color="#FFDD00" data-emoji="🧋"  data-font="Cookie" data-text="Buy me a bubble tea" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>    <span id="info"></span>
+    <button onclick="toggleOnlyDiff()">Diff only</button>
+	<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="miw4n" data-color="#FFDD00" data-emoji="🧋"  data-font="Cookie" data-text="Buy me a bubble tea" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>    <span id="info"></span>
+    <span id="info"></span>
 </header>
 
 <div class="container">
@@ -132,12 +139,28 @@ textarea {
 let diffs = [];
 let diffIndex = -1;
 
+let ignoreSpaces = false;
+let ignoreEmpty = false;
+let onlyDiff = false;
+
+// =================== Scroll synchronisé ===================
+function syncScroll(a, b) {
+    let lock = false;
+    a.addEventListener("scroll", () => {
+        if (lock) return;
+        lock = true;
+        b.scrollTop = a.scrollTop;
+        lock = false;
+    });
+}
+syncScroll(document.getElementById("leftView"), document.getElementById("rightView"));
+syncScroll(document.getElementById("rightView"), document.getElementById("leftView"));
+
+// =================== Navigation ligne ===================
 function gotoLine(container, lineIndex) {
-    // Nettoyage ancien focus
     container.querySelectorAll(".line-active")
         .forEach(l => l.classList.remove("line-active"));
 
-    // Chaque ligne = 2 div (lineno + code)
     let codeLine = container.children[lineIndex * 2 + 1];
     let numLine  = container.children[lineIndex * 2];
 
@@ -146,12 +169,10 @@ function gotoLine(container, lineIndex) {
     codeLine.classList.add("line-active");
     numLine.classList.add("line-active");
 
-    codeLine.scrollIntoView({
-        block: "center",
-        behavior: "smooth"
-    });
+    codeLine.scrollIntoView({block:"center", behavior:"smooth"});
 }
 
+// =================== Algorithme Myers ===================
 function myersDiff(a, b) {
     const N = a.length;
     const M = b.length;
@@ -166,194 +187,161 @@ function myersDiff(a, b) {
 
         for (let k = -d; k <= d; k += 2) {
             let x;
-            if (k === -d || (k !== d && v.get(k - 1) < v.get(k + 1))) {
-                x = v.get(k + 1);
-            } else {
-                x = v.get(k - 1) + 1;
-            }
+            if (k === -d || (k !== d && v.get(k-1) < v.get(k+1))) x = v.get(k+1);
+            else x = v.get(k-1)+1;
             let y = x - k;
 
-            while (x < N && y < M && a[x] === b[y]) {
-                x++; y++;
-            }
+            while (x<N && y<M && a[x]===b[y]) { x++; y++; }
             current.set(k, x);
-
-            if (x >= N && y >= M) {
-                return buildEditScript(trace, a, b);
-            }
+            if (x>=N && y>=M) return buildEditScript(trace,a,b);
         }
         v.clear();
-        for (let [k, val] of current) v.set(k, val);
+        for (let [k,val] of current) v.set(k,val);
     }
 }
 
 function buildEditScript(trace, a, b) {
-    let x = a.length;
-    let y = b.length;
+    let x=a.length, y=b.length;
     const result = [];
-
-    for (let d = trace.length - 1; d >= 0; d--) {
+    for (let d=trace.length-1; d>=0; d--) {
         const v = trace[d];
-        const k = x - y;
+        const k = x-y;
         let prevK;
-
-        if (k === -d || (k !== d && v.get(k - 1) < v.get(k + 1))) {
-            prevK = k + 1;
-        } else {
-            prevK = k - 1;
-        }
+        if (k===-d || (k!==d && v.get(k-1)<v.get(k+1))) prevK = k+1;
+        else prevK = k-1;
 
         const prevX = v.get(prevK);
         const prevY = prevX - prevK;
 
-        while (x > prevX && y > prevY) {
-            result.push({ type: "equal", line: a[x - 1] });
-            x--; y--;
-        }
-
-        if (d === 0) break;
-
-        if (x === prevX) {
-            result.push({ type: "add", line: b[y - 1] });
-            y--;
-        } else {
-            result.push({ type: "remove", line: a[x - 1] });
-            x--;
-        }
+        while (x>prevX && y>prevY) { result.push({type:"equal", line:a[x-1]}); x--; y--; }
+        if (d===0) break;
+        if (x===prevX) { result.push({type:"add", line:b[y-1]}); y--; }
+        else { result.push({type:"remove", line:a[x-1]}); x--; }
     }
-
     return result.reverse();
 }
 
-
-function detectLang(t) {
-    if (/^\s*<[^>]+>/m.test(t)) return "html";
-    if (/^\s*(router|interface|ip route|vrf)/mi.test(t)) return "cfg";
-    if (/^\s*#include|int main|printf\(/m.test(t)) return "c";
-    if (/^\s*def |import |print\(/m.test(t)) return "py";
-    return "plain";
+// =================== Prétraitement ===================
+function preprocess(lines) {
+    return lines.map(l=>{
+        let x=l;
+        if(ignoreSpaces) x=x.trim();
+        if(ignoreEmpty && x==="") return null;
+        return x;
+    }).filter(l=>l!==null);
 }
 
-function highlight(t) {
-    t = t
-        .replace(/(\/\/.*|#.*)/g,'<span class="com">$1</span>')
+// =================== Highlight ===================
+function detectLang(t) {
+    if(/^\s*<[^>]+>/m.test(t)) return "html";
+    if(/^\s*(router|interface|ip route|vrf)/mi.test(t)) return "cfg";
+    if(/^\s*#include|int main|printf\(/m.test(t)) return "c";
+    if(/^\s*def |import |print\(/m.test(t)) return "py";
+    return "plain";
+}
+function highlight(t){
+    t=t.replace(/(\/\/.*|#.*)/g,'<span class="com">$1</span>')
         .replace(/(".*?"|'.*?')/g,'<span class="str">$1</span>')
         .replace(/\b(\d+)\b/g,'<span class="num">$1</span>')
-        .replace(/\b(int|if|else|for|while|return|def|import|function|router|interface|ip)\b/g,
-                 '<span class="kw">$1</span>')
+        .replace(/\b(int|if|else|for|while|return|def|import|function|router|interface|ip)\b/g,'<span class="kw">$1</span>')
         .replace(/(&lt;\/?\w+&gt;)/g,'<span class="tag">$1</span>');
     return t;
 }
 
-function buildView(container, lines, diffSet) {
-    container.innerHTML = "";
-    lines.forEach((line, i) => {
-let ln = document.createElement("div");
-ln.className = "lineno";
-ln.textContent = i + 1;
-ln.style.cursor = "pointer";
-ln.onclick = () => gotoLine(container, i);
-
-
-        let cd = document.createElement("div");
-        cd.className = "code";
-        cd.innerHTML = highlight(line);
-
-        if (diffSet.has(i)) {
-            cd.classList.add("diff");
-            cd.dataset.diff = "";
+// =================== Diff mot par mot ===================
+function wordDiff(a,b){
+    const aw=a.split(/\b/), bw=b.split(/\b/);
+    let outA="", outB="";
+    const max=Math.max(aw.length,bw.length);
+    for(let i=0;i<max;i++){
+        if(aw[i]!==bw[i]){
+            if(aw[i]) outA+=`<span class="word-diff">${aw[i]}</span>`;
+            if(bw[i]) outB+=`<span class="word-diff">${bw[i]}</span>`;
+        }else{
+            outA+=aw[i]||"";
+            outB+=bw[i]||"";
         }
-
-        container.appendChild(ln);
-        container.appendChild(cd);
-    });
+    }
+    return [outA,outB];
 }
 
-function compare() {
-    diffs = [];
-    diffIndex = -1;
+// =================== Rendu ligne ===================
+function renderLine(container,num,text,cls,otherText="",isRight=false){
+    const ln=document.createElement("div");
+    ln.className="lineno";
+    ln.textContent=num;
+    ln.style.cursor="pointer";
+    ln.onclick=()=>gotoLine(container,num-1);
 
-    const L = left.value.split("\n");
-    const R = right.value.split("\n");
+    const cd=document.createElement("div");
+    cd.className="code "+cls;
 
-    const script = myersDiff(L, R);
+    let content=highlight(text);
+    if(cls==="modified" && otherText){
+        const [a,b]=wordDiff(text,otherText);
+        content=isRight?b:a;
+    }
+    cd.innerHTML=content;
 
-    leftView.innerHTML = "";
-    rightView.innerHTML = "";
-
-    let lnum = 1;
-    let rnum = 1;
-    let lineIndex = 0;
-
-    script.forEach(step => {
-        if (step.type === "equal") {
-            renderLine(leftView, lnum++, step.line, "equal");
-            renderLine(rightView, rnum++, step.line, "equal");
-        }
-        else if (step.type === "remove") {
-            renderLine(leftView, lnum++, step.line, "removed");
-            renderEmpty(rightView);
-            diffs.push(lineIndex++);
-        }
-        else if (step.type === "add") {
-            renderEmpty(leftView);
-            renderLine(rightView, rnum++, step.line, "added");
-            diffs.push(lineIndex++);
-        }
-    });
-
-    info.textContent = `${diffs.length} changement(s)`;
-}
-
-function renderLine(container, num, text, cls) {
-    const ln = document.createElement("div");
-    ln.className = "lineno";
-    ln.textContent = num;
-    ln.onclick = () => gotoLine(container, num - 1);
-
-    const cd = document.createElement("div");
-    cd.className = "code " + cls;
-    cd.innerHTML = highlight(text);
-    if (cls !== "equal") cd.dataset.diff = "";
-
+    if(cls!=="equal") cd.dataset.diff="";
     container.appendChild(ln);
     container.appendChild(cd);
 }
-
-function renderEmpty(container) {
-    const ln = document.createElement("div");
-    ln.className = "lineno";
-    ln.textContent = "";
-
-    const cd = document.createElement("div");
-    cd.className = "code";
-
-    container.appendChild(ln);
-    container.appendChild(cd);
+function renderEmpty(container){
+    const ln=document.createElement("div");
+    ln.className="lineno"; ln.textContent="";
+    const cd=document.createElement("div");
+    cd.className="code";
+    container.appendChild(ln); container.appendChild(cd);
 }
 
+// =================== Comparaison ===================
+function compare(){
+    diffs=[]; diffIndex=-1;
+    const L=preprocess(left.value.split("\n"));
+    const R=preprocess(right.value.split("\n"));
+    const script=myersDiff(L,R);
+    leftView.innerHTML=""; rightView.innerHTML="";
+    let lnum=1,rnum=1;
 
-function gotoDiff(i) {
-    if (!diffs.length) return;
-    document.querySelectorAll(".diff-active")
-        .forEach(d => d.classList.remove("diff-active"));
+    for(let i=0;i<script.length;i++){
+        const cur=script[i], next=script[i+1];
 
-    diffIndex = (i + diffs.length) % diffs.length;
-    let el = document.querySelectorAll("[data-diff]")[diffIndex];
-    el.classList.add("diff-active");
-    el.scrollIntoView({block:"center"});
+        // MODIFIED
+        if(cur?.type==="remove" && next?.type==="add"){
+            renderLine(leftView,lnum++,cur.line,"modified",next.line,false);
+            renderLine(rightView,rnum++,next.line,"modified",cur.line,true);
+            diffs.push(diffs.length); i++; continue;
+        }
+
+        if(cur.type==="equal"){
+            if(!onlyDiff){ renderLine(leftView,lnum++,cur.line,"equal"); renderLine(rightView,rnum++,cur.line,"equal"); }
+            else{ lnum++; rnum++; }
+        }
+        if(cur.type==="remove"){ renderLine(leftView,lnum++,cur.line,"removed"); renderEmpty(rightView); diffs.push(diffs.length); }
+        if(cur.type==="add"){ renderEmpty(leftView); renderLine(rightView,rnum++,cur.line,"added"); diffs.push(diffs.length); }
+    }
+    info.textContent=`${diffs.length} changement(s)`;
 }
 
-function nextDiff() { gotoDiff(diffIndex + 1); }
-function prevDiff() { gotoDiff(diffIndex - 1); }
-
-function resetLeft() { left.value = ""; leftView.innerHTML = ""; }
-function resetRight() { right.value = ""; rightView.innerHTML = ""; }
-function resetAll() {
-    resetLeft(); resetRight();
-    diffs = []; diffIndex = -1;
-    info.textContent = "";
+// =================== Diff navigation ===================
+function gotoDiff(i){
+    if(!diffs.length) return;
+    document.querySelectorAll(".diff-active").forEach(d=>d.classList.remove("diff-active"));
+    diffIndex=(i+diffs.length)%diffs.length;
+    let el=document.querySelectorAll("[data-diff]")[diffIndex];
+    if(el){ el.classList.add("diff-active"); el.scrollIntoView({block:"center"}); }
 }
+function nextDiff(){ gotoDiff(diffIndex+1); }
+function prevDiff(){ gotoDiff(diffIndex-1); }
+
+// =================== Resets ===================
+function resetLeft(){ left.value=""; leftView.innerHTML=""; }
+function resetRight(){ right.value=""; rightView.innerHTML=""; }
+function resetAll(){ resetLeft(); resetRight(); diffs=[]; diffIndex=-1; info.textContent=""; }
+
+// =================== Toggle diff only ===================
+function toggleOnlyDiff(){ onlyDiff=!onlyDiff; compare(); }
 
 </script>
 
