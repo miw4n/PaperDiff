@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Diff Viewer</title>
+
+<style>
+:root {
+    --bg-main: #f5f0e6;
+    --bg-panel: #ede4d3;
+    --bg-diff: #f2d6d6;
+    --border: #c9b99a;
+    --text: #2b2b2b;
+}
+
+.line-active {
+    background: #cdbf9f;
+}
+
+
+body {
+    margin: 0;
+    background: var(--bg-main);
+    color: var(--text);
+    font-family: Consolas, monospace;
+}
+
+header {
+    position: fixed;
+    top: 0;
+    z-index: 100;
+    background: #e6dcc8;
+    border-bottom: 1px solid var(--border);
+    padding: 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+button {
+    background: #d8cbb0;
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    cursor: pointer;
+}
+button:hover { background: #cdbf9f; }
+
+.container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: calc(100vh - 48px);
+}
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+}
+
+textarea {
+    height: 120px;
+    resize: none;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: #faf6ef;
+    padding: 8px;
+    font-size: 13px;
+}
+
+.diffview {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-panel);
+    display: grid;
+    grid-template-columns: 60px 1fr;
+}
+
+.lineno {
+    background: #e2d6be;
+    border-right: 1px solid var(--border);
+    padding: 4px 6px;
+    text-align: right;
+    user-select: none;
+}
+
+.code {
+    padding: 4px 8px;
+    white-space: pre-wrap;
+}
+
+/* Syntax */
+.kw { color: #005f87; font-weight: bold; }
+.str { color: #8f3f71; }
+.num { color: #af3a03; }
+.com { color: #6a737d; font-style: italic; }
+.tag { color: #005cc5; }
+
+/* Diff */
+.diff { background: var(--bg-diff); }
+.diff-active { outline: 2px solid #c92a2a; }
+</style>
+</head>
+
+<body>
+
+<header>
+    <button onclick="compare()">Comparer</button>
+    <button onclick="prevDiff()">◀</button>
+    <button onclick="nextDiff()">▶</button>
+    <button onclick="resetLeft()">Reset G</button>
+    <button onclick="resetRight()">Reset D</button>
+    <button onclick="resetAll()">Reset All</button>
+<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="miw4n" data-color="#FFDD00" data-emoji="🧋"  data-font="Cookie" data-text="Buy me a bubble tea" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>    <span id="info"></span>
+</header>
+
+<div class="container">
+    <div class="panel">
+        <textarea id="left" placeholder="Texte gauche"></textarea>
+        <div id="leftView" class="diffview"></div>
+    </div>
+    <div class="panel">
+        <textarea id="right" placeholder="Texte droite"></textarea>
+        <div id="rightView" class="diffview"></div>
+    </div>
+</div>
+
+<script>
+let diffs = [];
+let diffIndex = -1;
+
+function gotoLine(container, lineIndex) {
+    // Nettoyage ancien focus
+    container.querySelectorAll(".line-active")
+        .forEach(l => l.classList.remove("line-active"));
+
+    // Chaque ligne = 2 div (lineno + code)
+    let codeLine = container.children[lineIndex * 2 + 1];
+    let numLine  = container.children[lineIndex * 2];
+
+    if (!codeLine) return;
+
+    codeLine.classList.add("line-active");
+    numLine.classList.add("line-active");
+
+    codeLine.scrollIntoView({
+        block: "center",
+        behavior: "smooth"
+    });
+}
+
+
+function detectLang(t) {
+    if (/^\s*<[^>]+>/m.test(t)) return "html";
+    if (/^\s*(router|interface|ip route|vrf)/mi.test(t)) return "cfg";
+    if (/^\s*#include|int main|printf\(/m.test(t)) return "c";
+    if (/^\s*def |import |print\(/m.test(t)) return "py";
+    return "plain";
+}
+
+function highlight(t) {
+    t = t
+        .replace(/(\/\/.*|#.*)/g,'<span class="com">$1</span>')
+        .replace(/(".*?"|'.*?')/g,'<span class="str">$1</span>')
+        .replace(/\b(\d+)\b/g,'<span class="num">$1</span>')
+        .replace(/\b(int|if|else|for|while|return|def|import|function|router|interface|ip)\b/g,
+                 '<span class="kw">$1</span>')
+        .replace(/(&lt;\/?\w+&gt;)/g,'<span class="tag">$1</span>');
+    return t;
+}
+
+function buildView(container, lines, diffSet) {
+    container.innerHTML = "";
+    lines.forEach((line, i) => {
+let ln = document.createElement("div");
+ln.className = "lineno";
+ln.textContent = i + 1;
+ln.style.cursor = "pointer";
+ln.onclick = () => gotoLine(container, i);
+
+
+        let cd = document.createElement("div");
+        cd.className = "code";
+        cd.innerHTML = highlight(line);
+
+        if (diffSet.has(i)) {
+            cd.classList.add("diff");
+            cd.dataset.diff = "";
+        }
+
+        container.appendChild(ln);
+        container.appendChild(cd);
+    });
+}
+
+function compare() {
+    diffs = [];
+    diffIndex = -1;
+
+    let L = left.value.split("\n");
+    let R = right.value.split("\n");
+    let max = Math.max(L.length, R.length);
+
+    let diffSet = new Set();
+
+    for (let i = 0; i < max; i++) {
+        if ((L[i] || "") !== (R[i] || "")) diffSet.add(i);
+    }
+
+    diffs = [...diffSet];
+    buildView(leftView, L, diffSet);
+    buildView(rightView, R, diffSet);
+
+    info.textContent = `${diffs.length} différence(s)`;
+}
+
+function gotoDiff(i) {
+    if (!diffs.length) return;
+    document.querySelectorAll(".diff-active")
+        .forEach(d => d.classList.remove("diff-active"));
+
+    diffIndex = (i + diffs.length) % diffs.length;
+    let el = document.querySelectorAll("[data-diff]")[diffIndex];
+    el.classList.add("diff-active");
+    el.scrollIntoView({block:"center"});
+}
+
+function nextDiff() { gotoDiff(diffIndex + 1); }
+function prevDiff() { gotoDiff(diffIndex - 1); }
+
+function resetLeft() { left.value = ""; leftView.innerHTML = ""; }
+function resetRight() { right.value = ""; rightView.innerHTML = ""; }
+function resetAll() {
+    resetLeft(); resetRight();
+    diffs = []; diffIndex = -1;
+    info.textContent = "";
+}
+
+</script>
+
+</body>
+</html>
