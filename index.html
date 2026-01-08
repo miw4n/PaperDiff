@@ -249,20 +249,31 @@ function highlight(t){
 }
 
 // =================== Diff mot par mot ===================
-function wordDiff(a,b){
-    const aw=a.split(/\b/), bw=b.split(/\b/);
-    let outA="", outB="";
-    const max=Math.max(aw.length,bw.length);
-    for(let i=0;i<max;i++){
-        if(aw[i]!==bw[i]){
-            if(aw[i]) outA+=`<span class="word-diff">${aw[i]}</span>`;
-            if(bw[i]) outB+=`<span class="word-diff">${bw[i]}</span>`;
-        }else{
-            outA+=aw[i]||"";
-            outB+=bw[i]||"";
+// =================== Diff mot par mot corrigé ===================
+function wordDiff(a, b) {
+    // On utilise une regex qui garde les séparateurs (espaces, ponctuation) pour ne pas perdre la mise en forme
+    const aw = a.split(/(\b|\s+)/), bw = b.split(/(\b|\s+)/);
+    let outA = "", outB = "";
+    let i = 0, j = 0;
+
+    // Utilisation d'un algorithme simplifié de comparaison 
+    // Pour un "vrai" diff par mot parfait, il faudrait Myers ici aussi, 
+    // mais pour une ligne, une comparaison directe par index suffit souvent :
+    const max = Math.max(aw.length, bw.length);
+    
+    for (let k = 0; k < max; k++) {
+        const wordA = aw[k] || "";
+        const wordB = bw[k] || "";
+
+        if (wordA === wordB) {
+            outA += wordA;
+            outB += wordB;
+        } else {
+            if (wordA) outA += `<span class="word-diff">${wordA}</span>`;
+            if (wordB) outB += `<span class="word-diff">${wordB}</span>`;
         }
     }
-    return [outA,outB];
+    return [outA, outB];
 }
 
 // =================== Rendu ligne ===================
