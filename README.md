@@ -1,50 +1,45 @@
 # PaperDiff 📜
 
-PaperDiff is a minimalist, lightweight, and offline-ready web tool to compare two blocks of text or code. It features a clean, retro-style interface and highlights syntax for common programming languages.
-
 [Try me on GitHub ](https://miw4n.github.io/PaperDiff/)
 
----
 
-## 🚀 Features / Fonctionnalités
+## Français
 
-### English
-* **Side-by-side Comparison:** Clearly see differences between two texts.
-* **Easy Navigation:** Use arrow buttons to jump instantly from one difference to another.
-* **Syntax Highlighting:** Automatically recognizes and colors code for HTML, Python, C, and Network Configs.
-* **Line Focus:** Click on any line number to highlight it.
-* **One-Click Reset:** Quickly clear one or both panels.
-* **Pure JS:** No dependencies, no tracking, works offline.
+### À propos
+**PaperDiff** est un outil de comparaison de texte (diff) léger et auto-hébergé dans un seul fichier HTML. Il permet de visualiser les différences entre deux textes avec une précision au mot près, tout en conservant l'intégrité visuelle de chaque source.
 
-### Français
-* **Comparaison côte à côte :** Visualisez clairement les différences entre deux textes.
-* **Navigation simplifiée :** Utilisez les flèches pour sauter instantanément d'une différence à l'autre.
-* **Coloration syntaxique :** Reconnaît et colore automatiquement le code (HTML, Python, C, et configurations réseau).
-* **Focus de ligne :** Cliquez sur un numéro de ligne pour la mettre en évidence.
-* **Réinitialisation rapide :** Effacez un seul panneau ou les deux en un clic.
-* **100% JavaScript :** Aucune dépendance, aucun tracking, fonctionne hors-ligne.
+### Fonctionnalités
+* **Comparaison Side-by-Side** : Texte 1 à gauche, Texte 2 à droite.
+* **Précision par mot** : Surligne les mots ajoutés ou supprimés sans mélanger les sources.
+* **Navigation Intelligente** : Boutons "Précédent" et "Suivant" pour naviguer entre les changements.
+* **Coloration Syntaxique** : Support basique pour le code (HTML, Python, C, config réseau).
+* **Mode "Diff Only"** : Masque les lignes identiques pour se concentrer sur les modifications.
+
+### Utilisation
+1. Ouvrez le fichier `index.html` dans n'importe quel navigateur.
+2. Collez vos textes dans les zones de saisie.
+3. Cliquez sur **Comparer**.
 
 ---
 
-## 🛠️ Usage / Utilisation
+## English
 
-1. Open `index.html` in your favorite browser.
-2. Paste your original text in the **Left** panel.
-3. Paste your modified text in the **Right** panel.
-4. Click **Comparer**.
-5. Use ◀ and ▶ to navigate through changes.
+### About
+**PaperDiff** is a lightweight, self-hosted visual comparison tool contained in a single HTML file. It provides a side-by-side view of differences with word-level precision while maintaining the structural integrity of each source.
+
+### Key Features
+* **Side-by-Side Comparison**: Original text on the left, modified text on the right.
+* **Word-Level Diff**: Highlights specific added or removed words without merging texts.
+* **Smart Navigation**: "Next" and "Previous" buttons to jump between modifications.
+* **Syntax Highlighting**: Basic support for code snippets (HTML, Python, C, Network configs).
+* **"Diff Only" Mode**: Hide identical lines to focus strictly on changes.
+
+### How to use
+1. Open `index.html` in any web browser.
+2. Paste your texts into the input areas.
+3. Click **Compare**.
 
 ---
 
-## 🎨 Supported Languages / Langages supportés
-
-* **HTML**
-* **Python**
-* **C / C++**
-* **Network Configs** (Cisco-style)
-* **Plain Text**
-
----
-
-## 📝 License
-This project is open-source. Feel free to use and modify it!
+## License
+MIT - *Feel free to use and modify!*
