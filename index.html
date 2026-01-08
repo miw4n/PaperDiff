@@ -69,9 +69,23 @@ textarea {
     font-size: 13px;
 }
 
-.added    { background: #d7ecd9; }
-.removed  { background: #f3cfcf; }
-.modified { background: #f2d6d6; }
+/* Mots supprimés à GAUCHE */
+.word-diff-remove {
+    background-color: #f8a3a3;
+    text-decoration: line-through;
+    color: #a00;
+}
+
+/* Mots ajoutés à DROITE */
+.word-diff-add {
+    background-color: #a3f8a3;
+    color: #006400;
+}
+
+/* Fond des lignes pour la structure */
+.removed { background-color: #ffeef0; }
+.added { background-color: #e6ffed; }
+.modified { background-color: #fff9e6; }
 
 .diffview {
     flex: 1;
@@ -82,16 +96,14 @@ textarea {
 }
 
 .lineno {
-    background: #e2d6be;
-    border-right: 1px solid var(--border);
-    padding: 4px 6px;
-    text-align: right;
-    user-select: none;
+    min-height: 1.2em; /* Aligné avec la zone code */
 }
 
 .code {
     padding: 4px 8px;
     white-space: pre-wrap;
+    min-height: 1.2em; /* Force la hauteur même si la ligne est vide */
+    line-height: 1.2em;
 }
 
 /* Syntax */
@@ -105,8 +117,22 @@ textarea {
 .diff { background: var(--bg-diff); }
 .diff-active { outline: 2px solid #c92a2a; }
 
-.word-diff { background: #e6a5a5; padding: 0 2px; border-radius: 2px; }
+/* À remplacer dans ton <style> */
+.word-diff { 
+    padding: 0 1px; 
+    border-radius: 2px; 
+}
 
+/* Mots supprimés (Gauche) */
+#leftView .word-diff { 
+    background: #f8a3a3; 
+    text-decoration: line-through;
+}
+
+/* Mots ajoutés (Droite) */
+#rightView .word-diff { 
+    background: #a3f8a3; 
+}
 </style>
 </head>
 
@@ -223,12 +249,12 @@ function buildEditScript(trace, a, b) {
 
 // =================== Prétraitement ===================
 function preprocess(lines) {
-    return lines.map(l=>{
-        let x=l;
-        if(ignoreSpaces) x=x.trim();
-        if(ignoreEmpty && x==="") return null;
+    return lines.map(l => {
+        let x = l;
+        if (ignoreSpaces) x = x.trimEnd(); // On garde l'existence de la ligne, on nettoie juste la fin
         return x;
-    }).filter(l=>l!==null);
+    });
+    // On retire le .filter(l=>l!==null) s'il y en avait un qui supprimait les lignes vides
 }
 
 // =================== Highlight ===================
@@ -239,65 +265,115 @@ function detectLang(t) {
     if(/^\s*def |import |print\(/m.test(t)) return "py";
     return "plain";
 }
-function highlight(t){
-    t=t.replace(/(\/\/.*|#.*)/g,'<span class="com">$1</span>')
-        .replace(/(".*?"|'.*?')/g,'<span class="str">$1</span>')
-        .replace(/\b(\d+)\b/g,'<span class="num">$1</span>')
-        .replace(/\b(int|if|else|for|while|return|def|import|function|router|interface|ip)\b/g,'<span class="kw">$1</span>')
-        .replace(/(&lt;\/?\w+&gt;)/g,'<span class="tag">$1</span>');
-    return t;
+
+function highlight(t) {
+    return t
+        .replace(/(\/\/.*|#.*)/g, '<span class="com">$1</span>')
+        .replace(/(&quot;.*?&quot;|&#039;.*?&#039;)/g, '<span class="str">$1</span>')
+        .replace(/\b(\d+)\b/g, '<span class="num">$1</span>')
+        .replace(/\b(int|if|else|for|while|return|def|import|function|router|interface|ip)\b/g, '<span class="kw">$1</span>')
+        // On cible spécifiquement les tags HTML déjà échappés
+        .replace(/(&lt;\/?\w+.*?&gt;)/g, '<span class="tag">$1</span>');
 }
 
 // =================== Diff mot par mot ===================
 // =================== Diff mot par mot corrigé ===================
-function wordDiff(a, b) {
-    // On utilise une regex qui garde les séparateurs (espaces, ponctuation) pour ne pas perdre la mise en forme
-    const aw = a.split(/(\b|\s+)/), bw = b.split(/(\b|\s+)/);
-    let outA = "", outB = "";
-    let i = 0, j = 0;
-
-    // Utilisation d'un algorithme simplifié de comparaison 
-    // Pour un "vrai" diff par mot parfait, il faudrait Myers ici aussi, 
-    // mais pour une ligne, une comparaison directe par index suffit souvent :
-    const max = Math.max(aw.length, bw.length);
+function wordDiff(textLeft, textRight) {
+    // On sépare par mots tout en gardant les espaces pour la reconstruction
+    const wordsL = textLeft.split(/(\s+)/);
+    const wordsR = textRight.split(/(\s+)/);
     
-    for (let k = 0; k < max; k++) {
-        const wordA = aw[k] || "";
-        const wordB = bw[k] || "";
+    let outL = "";
+    let outR = "";
 
-        if (wordA === wordB) {
-            outA += wordA;
-            outB += wordB;
+    // On utilise un ensemble pour une comparaison rapide des mots présents
+    // Note : Pour un diff parfait, Myers serait idéal ici aussi, 
+    // mais cette approche par "présence" règle ton souci immédiat.
+    const setL = new Set(wordsL.filter(w => w.trim() !== ""));
+    const setR = new Set(wordsR.filter(w => w.trim() !== ""));
+
+    // Reconstruction de la GAUCHE (Texte 1)
+    wordsL.forEach(word => {
+        if (word.trim() !== "" && !setR.has(word)) {
+            // Le mot est dans L mais pas dans R -> il a été supprimé
+            outL += `<span class="word-diff-remove">${word}</span>`;
         } else {
-            if (wordA) outA += `<span class="word-diff">${wordA}</span>`;
-            if (wordB) outB += `<span class="word-diff">${wordB}</span>`;
+            outL += word;
         }
-    }
-    return [outA, outB];
+    });
+
+    // Reconstruction de la DROITE (Texte 2)
+    wordsR.forEach(word => {
+        if (word.trim() !== "" && !setL.has(word)) {
+            // Le mot est dans R mais pas dans L -> il a été ajouté
+            outR += `<span class="word-diff-add">${word}</span>`;
+        } else {
+            outR += word;
+        }
+    });
+
+    return [outL, outR];
+}
+
+function escapeHTML(str) {
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 // =================== Rendu ligne ===================
-function renderLine(container,num,text,cls,otherText="",isRight=false){
-    const ln=document.createElement("div");
-    ln.className="lineno";
-    ln.textContent=num;
-    ln.style.cursor="pointer";
-    ln.onclick=()=>gotoLine(container,num-1);
+function renderLine(container, num, text, cls, otherText = "", isRight = false) {
+    const ln = document.createElement("div");
+    ln.className = "lineno";
+    ln.textContent = num;
 
-    const cd=document.createElement("div");
-    cd.className="code "+cls;
+    const cd = document.createElement("div");
+    cd.className = "code " + cls;
 
-    let content=highlight(text);
-    if(cls==="modified" && otherText){
-        const [a,b]=wordDiff(text,otherText);
-        content=isRight?b:a;
+    // Étape 1 : Échapper le texte brut de MA zone uniquement
+    let safeText = escapeHTML(text);
+    let finalHTML = "";
+
+    if (cls === "modified" && otherText !== "") {
+        // Étape 2 : Appliquer le diff SANS mélanger les textes
+        // Si isRight est vrai, on cherche les "ajouts" dans le texte de droite
+        // Si isRight est faux, on cherche les "suppressions" dans le texte de gauche
+        finalHTML = getDiffMarkup(safeText, escapeHTML(otherText), isRight);
+    } else {
+        finalHTML = highlight(safeText);
     }
-    cd.innerHTML=content;
 
-    if(cls!=="equal") cd.dataset.diff="";
+    cd.innerHTML = finalHTML || "&nbsp;";
+    if (cls !== "equal") cd.dataset.diff = "";
+    
     container.appendChild(ln);
     container.appendChild(cd);
 }
+
+function getDiffMarkup(textToShow, textToCompare, isAddition) {
+    const wordsShow = textToShow.split(/(\s+|\b)/);
+    const wordsComp = textToCompare.split(/(\s+|\b)/);
+    
+    // On crée un set des mots présents dans l'AUTRE texte pour comparaison
+    const setCompare = new Set(wordsComp.filter(w => w.trim() !== ""));
+    
+    let output = "";
+    wordsShow.forEach(word => {
+        const trimmed = word.trim();
+        if (trimmed !== "" && !setCompare.has(trimmed)) {
+            // Si le mot de MA zone n'existe pas dans l'AUTRE zone
+            const spanClass = isAddition ? "word-diff-add" : "word-diff-remove";
+            output += `<span class="${spanClass}">${word}</span>`;
+        } else {
+            output += word;
+        }
+    });
+    return output;
+}
+
 function renderEmpty(container){
     const ln=document.createElement("div");
     ln.className="lineno"; ln.textContent="";
@@ -307,42 +383,66 @@ function renderEmpty(container){
 }
 
 // =================== Comparaison ===================
-function compare(){
-    diffs=[]; diffIndex=-1;
-    const L=preprocess(left.value.split("\n"));
-    const R=preprocess(right.value.split("\n"));
-    const script=myersDiff(L,R);
-    leftView.innerHTML=""; rightView.innerHTML="";
-    let lnum=1,rnum=1;
+function compare() {
+    diffs = []; diffIndex = -1;
+    const L = preprocess(left.value.split("\n"));
+    const R = preprocess(right.value.split("\n"));
+    const script = myersDiff(L, R);
+    
+    leftView.innerHTML = ""; rightView.innerHTML = "";
+    let lnum = 1, rnum = 1;
 
-    for(let i=0;i<script.length;i++){
-        const cur=script[i], next=script[i+1];
+    let i = 0;
+    while (i < script.length) {
+        let cur = script[i];
 
-        // MODIFIED
-        if(cur?.type==="remove" && next?.type==="add"){
-            renderLine(leftView,lnum++,cur.line,"modified",next.line,false);
-            renderLine(rightView,rnum++,next.line,"modified",cur.line,true);
-            diffs.push(diffs.length); i++; continue;
+        if (cur.type === "equal") {
+            if (!onlyDiff) {
+                renderLine(leftView, lnum++, cur.line, "equal");
+                renderLine(rightView, rnum++, cur.line, "equal");
+            } else {
+                lnum++; rnum++;
+            }
+            i++;
+        } 
+        else {
+            // On groupe les blocs de modifications pour les aligner
+            let removes = [];
+            let adds = [];
+
+            while (i < script.length && script[i].type !== "equal") {
+                if (script[i].type === "remove") removes.push(script[i].line);
+                else adds.push(script[i].line);
+                i++;
+            }
+
+            // On détermine le nombre de lignes maximum dans ce bloc de modif
+            const maxRows = Math.max(removes.length, adds.length);
+
+            for (let j = 0; j < maxRows; j++) {
+                const leftLine = removes[j];
+                const rightLine = adds[j];
+
+                if (leftLine !== undefined && rightLine !== undefined) {
+                    // C'est une modification (ligne changée)
+                    renderLine(leftView, lnum++, leftLine, "modified", rightLine, false);
+                    renderLine(rightView, rnum++, rightLine, "modified", leftLine, true);
+                } else if (leftLine !== undefined) {
+                    // C'veut dire que c'est une suppression pure
+                    renderLine(leftView, lnum++, leftLine, "removed");
+                    renderEmpty(rightView);
+                } else if (rightLine !== undefined) {
+                    // C'est un ajout pur
+                    renderEmpty(leftView);
+                    renderLine(rightView, rnum++, rightLine, "added");
+                }
+                diffs.push(diffs.length);
+            }
         }
-
-        if(cur.type==="equal"){
-            if(!onlyDiff){ renderLine(leftView,lnum++,cur.line,"equal"); renderLine(rightView,rnum++,cur.line,"equal"); }
-            else{ lnum++; rnum++; }
-        }
-        if(cur.type==="remove"){ renderLine(leftView,lnum++,cur.line,"removed"); renderEmpty(rightView); diffs.push(diffs.length); }
-        if(cur.type==="add"){ renderEmpty(leftView); renderLine(rightView,rnum++,cur.line,"added"); diffs.push(diffs.length); }
     }
-    info.textContent=`${diffs.length} changement(s)`;
+    info.textContent = `${diffs.length} changement(s)`;
 }
 
-// =================== Diff navigation ===================
-function gotoDiff(i){
-    if(!diffs.length) return;
-    document.querySelectorAll(".diff-active").forEach(d=>d.classList.remove("diff-active"));
-    diffIndex=(i+diffs.length)%diffs.length;
-    let el=document.querySelectorAll("[data-diff]")[diffIndex];
-    if(el){ el.classList.add("diff-active"); el.scrollIntoView({block:"center"}); }
-}
 function nextDiff(){ gotoDiff(diffIndex+1); }
 function prevDiff(){ gotoDiff(diffIndex-1); }
 
