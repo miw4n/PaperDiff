@@ -115,8 +115,11 @@ textarea {
 
 /* Diff */
 .diff { background: var(--bg-diff); }
-.diff-active { outline: 2px solid #c92a2a; }
-
+.diff-active {
+    outline: 2px solid #e67e22 !important; /* Orange pour bien voir la sélection */
+    outline-offset: -2px;
+    background-color: rgba(230, 126, 34, 0.1) !important;
+}
 /* À remplacer dans ton <style> */
 .word-diff { 
     padding: 0 1px; 
@@ -443,8 +446,39 @@ function compare() {
     info.textContent = `${diffs.length} changement(s)`;
 }
 
-function nextDiff(){ gotoDiff(diffIndex+1); }
-function prevDiff(){ gotoDiff(diffIndex-1); }
+function gotoDiff(i) {
+    if (!diffs.length) return;
+
+    // 1. Nettoyer l'ancienne mise en évidence
+    document.querySelectorAll(".diff-active").forEach(d => d.classList.remove("diff-active"));
+
+    // 2. Calculer le nouvel index (boucle infinie)
+    diffIndex = (i + diffs.length) % diffs.length;
+
+    // 3. Trouver les éléments correspondants dans les deux vues
+    // On récupère tous les éléments data-diff. Comme ils sont rendus dans l'ordre :
+    // Les index pairs/impairs ou l'ordre DOM nous permettent de les cibler.
+    const allDiffsL = leftView.querySelectorAll("[data-diff]");
+    const allDiffsR = rightView.querySelectorAll("[data-diff]");
+
+    const elL = allDiffsL[diffIndex];
+    const elR = allDiffsR[diffIndex];
+
+    if (elL || elR) {
+        if (elL) elL.classList.add("diff-active");
+        if (elR) elR.classList.add("diff-active");
+
+        // Faire défiler (la synchro de scroll fera le reste pour l'autre côté)
+        const target = elL || elR;
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    info.textContent = `${diffIndex + 1} / ${diffs.length} changement(s)`;
+}
+
+// Les fonctions pour les boutons
+function nextDiff() { gotoDiff(diffIndex + 1); }
+function prevDiff() { gotoDiff(diffIndex - 1); }
 
 // =================== Resets ===================
 function resetLeft(){ left.value=""; leftView.innerHTML=""; }
